@@ -158,54 +158,54 @@ def vec_from_transforms(panorama_size, refer_unit, transforms):
     return vec
 
 def fun(X, panorama_size, refer_unit, vinliers, hinliers):
-        output = []
-        #horizontal inliers
-        for i in range(panorama_size[0]):
-            for j in range(panorama_size[1] - 1):
-                s = i * (panorama_size[1] - 1) + j
-                inliers = hinliers[s]
-                H_left = transform_from_vec(panorama_size, refer_unit, X, i, j)
-                H_right = transform_from_vec(panorama_size, refer_unit, X, i, j+1)
-                left = np.ones((inliers.shape[0], 3))
-                right = np.ones((inliers.shape[0], 3))
-                if j < refer_unit[1] - 1:
-                    left[:, :2] = inliers[:, :2]
-                    right[:, :2] = inliers[:, 2:]
-                else:
-                    left[:, :2] = inliers[:, 2:]
-                    right[:, :2] = inliers[:, :2]
-                left_ims = np.array([np.dot(H_left, point) for point in left])
-                right_ims = np.array([np.dot(H_right, point) for point in right])
-                left_ims = np.stack((left_ims[:, 0] / left_ims[:, 2], left_ims[:, 1] / left_ims[:, 2],)).T
-                right_ims = np.stack((right_ims[:, 0] / right_ims[:, 2], right_ims[:, 1] / right_ims[:, 2],)).T
-                for k in range(left_ims.shape[0]):
-                    output.append(left_ims[k][0] - right_ims[k][0])
-                    output.append(left_ims[k][1] - right_ims[k][1])
-        
-        #vertical inliers
-        for i in range(panorama_size[0] - 1):
-            for j in range(panorama_size[1]):
-                s = i * (panorama_size[1]) + j
-                inliers = vinliers[s]
-                H_upper = transform_from_vec(panorama_size, refer_unit, X, i, j)
-                H_lower = transform_from_vec(panorama_size, refer_unit, X, i+1, j)
-                upper = np.ones((inliers.shape[0], 3))
-                lower = np.ones((inliers.shape[0], 3))
-                if i < refer_unit[0] - 1:
-                    upper[:, :2] = inliers[:, :2]
-                    lower[:, :2] = inliers[:, 2:]
-                else:
-                    upper[:, :2] = inliers[:, 2:]
-                    lower[:, :2] = inliers[:, :2]
-                upper_ims = np.array([np.dot(H_upper, point) for point in upper])
-                lower_ims = np.array([np.dot(H_lower, point) for point in lower])
-                upper_ims = np.stack((upper_ims[:, 0] / upper_ims[:, 2], upper_ims[:, 1] / upper_ims[:, 2],)).T
-                lower_ims = np.stack((lower_ims[:, 0] / lower_ims[:, 2], lower_ims[:, 1] / lower_ims[:, 2],)).T
-                for k in range(upper_ims.shape[0]):
-                    output.append(upper_ims[k][0] - lower_ims[k][0])
-                    output.append(upper_ims[k][1] - lower_ims[k][1])
+    output = []
+    #horizontal inliers
+    for i in range(panorama_size[0]):
+        for j in range(panorama_size[1] - 1):
+            s = i * (panorama_size[1] - 1) + j
+            inliers = hinliers[s]
+            H_left = transform_from_vec(panorama_size, refer_unit, X, i, j)
+            H_right = transform_from_vec(panorama_size, refer_unit, X, i, j+1)
+            left = np.ones((inliers.shape[0], 3))
+            right = np.ones((inliers.shape[0], 3))
+            if j < refer_unit[1] - 1:
+                left[:, :2] = inliers[:, :2]
+                right[:, :2] = inliers[:, 2:]
+            else:
+                left[:, :2] = inliers[:, 2:]
+                right[:, :2] = inliers[:, :2]
+            left_ims = np.array([np.dot(H_left, point) for point in left])
+            right_ims = np.array([np.dot(H_right, point) for point in right])
+            left_ims = np.stack((left_ims[:, 0] / left_ims[:, 2], left_ims[:, 1] / left_ims[:, 2],)).T
+            right_ims = np.stack((right_ims[:, 0] / right_ims[:, 2], right_ims[:, 1] / right_ims[:, 2],)).T
+            for k in range(left_ims.shape[0]):
+                output.append(left_ims[k][0] - right_ims[k][0])
+                output.append(left_ims[k][1] - right_ims[k][1])
+    
+    #vertical inliers
+    for i in range(panorama_size[0] - 1):
+        for j in range(panorama_size[1]):
+            s = i * (panorama_size[1]) + j
+            inliers = vinliers[s]
+            H_upper = transform_from_vec(panorama_size, refer_unit, X, i, j)
+            H_lower = transform_from_vec(panorama_size, refer_unit, X, i+1, j)
+            upper = np.ones((inliers.shape[0], 3))
+            lower = np.ones((inliers.shape[0], 3))
+            if i < refer_unit[0] - 1:
+                upper[:, :2] = inliers[:, :2]
+                lower[:, :2] = inliers[:, 2:]
+            else:
+                upper[:, :2] = inliers[:, 2:]
+                lower[:, :2] = inliers[:, :2]
+            upper_ims = np.array([np.dot(H_upper, point) for point in upper])
+            lower_ims = np.array([np.dot(H_lower, point) for point in lower])
+            upper_ims = np.stack((upper_ims[:, 0] / upper_ims[:, 2], upper_ims[:, 1] / upper_ims[:, 2],)).T
+            lower_ims = np.stack((lower_ims[:, 0] / lower_ims[:, 2], lower_ims[:, 1] / lower_ims[:, 2],)).T
+            for k in range(upper_ims.shape[0]):
+                output.append(upper_ims[k][0] - lower_ims[k][0])
+                output.append(upper_ims[k][1] - lower_ims[k][1])
 
-        return np.array(output)
+    return np.array(output)
 
 def optimization(transforms, panorama_size, refer_unit,  vinliers, hinliers):
     vec = vec_from_transforms(panorama_size, refer_unit, transforms)
