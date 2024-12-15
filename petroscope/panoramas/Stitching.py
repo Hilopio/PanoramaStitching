@@ -6,7 +6,7 @@ from time import time
 from tqdm import tqdm
 import gc
 from PIL import Image
-import typing
+from typing import List, Tuple, Union
 
 import torch
 import torchvision
@@ -17,32 +17,54 @@ import kornia as K
 import kornia.feature as KF
 
 class Stitcher():
-    def __init__(self):
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    def __init__(self, device=None):
+        self.device = device if device else torch.device('cpu')
         self.matcher = KF.LoFTR(pretrained="outdoor").to(self.device)
-        # self.size = (480, 600)
-        self.size = (600, 400)
+        self.size = np.array((600, 400))
     
-    # def preprocess(self, img_names: List[str]) -> List[torch.Tensor]: 
+    def preprocess(self, img_paths: List[Union[str, os.PathLike]]) -> Tuple[List[Tuple[float]], List[torch.Tensor]]:
+        """Opens images from paths, saves the original dimensions,
+          converts the images to the required format, and collects them into a list
 
-    def Stitch(self, directory, outputfile='output.jpg', logger=None, verbose=True):
-        start_time = time()
-        
-        pic_names = os.listdir(directory)
-        n = len(pic_names)
+        Args:
+            img_paths : paths to images
 
+        Returns:
+            list of original sizes of images, list of torch.Tensor of size [1, 1, 600, 400]
+        """
         images = []
-        for name in pic_names: 
-            path = os.path.join(directory, name)
+        orig_sizes = []
+        for path in img_paths: 
             img = Image.open(path).convert('L')
-            # orig_size = img.size[::-1]
-            # img = img.resize(self.size[::-1], resample=Image.Resampling.LANCZOS)
-            orig_size = img.size
+            orig_sizes.append(np.array(img.size))
             img = img.resize(self.size, resample=Image.Resampling.LANCZOS)
-
             img = torchvision.transforms.functional.pil_to_tensor(img) 
             img = img.unsqueeze(dim=0)
-            images.append(img)    
+            images.append(img)
+        
+        return orig_sizes, images
+
+    def Stitch(self, 
+               directory: Union[str, os.PathLike],
+               outputfile: Union[str, os.PathLike] = 'output.jpg',
+               verbose : bool = False,
+               logger: Union[bool, dict[str, list]] = False) -> None:
+        """A method that implements stitching a panorama from a directory into an output file
+
+        Args:
+            directory : a directory containing the images that make up the panorama.
+                There should be no other files in the directory
+            outputfile : a file where the final panorama should be saved.
+                The extension must be one of '.jpg', '.png', or '.bmp'."
+            verbose : If True, it outputs information about the execution time of the stages and the accuracy of the stitching
+            logger : A technical argument used for logging information about execution time and accuracy into a dictionary. Leave it as False
+        """
+        start_time = time()
+        pic_names = os.listdir(directory)
+        img_paths = [os.path.join(directory, name) for name in pic_names]
+        n = len(pic_names)
+
+        orig_sizes, images = self.preprocess(img_paths)
 
         batch1 = []
         batch2 = []
@@ -83,6 +105,7 @@ class Stitcher():
             all_corr.append(tmp)
             del correspondences
             torch.cuda.empty_cache()
+            gc.collect()
     
         if verbose:
             print(f'LoFTR done - {time() - s_time:.4}s')
@@ -99,6 +122,8 @@ class Stitcher():
                 kp0 = batch_corr['keypoints0'][idx]
                 kp1 = batch_corr['keypoints1'][idx]
                 conf = batch_corr['confidence'][idx]
+                kp0 *= orig_sizes[i] / self.size
+                kp1 *= orig_sizes[i] / self.size
                 diff_corr.append(np.concatenate([kp0, kp1, conf[..., None]], axis=-1))
         
         good_corrs = []
@@ -114,24 +139,16 @@ class Stitcher():
                 num = corrs.shape[0]
                 if num < 10:
                     continue
-        
-                # corrs[:, 0] *= orig_size[1] / self.size[1]
-                # corrs[:, 2] *= orig_size[1] / self.size[1]
-                # corrs[:, 1] *= orig_size[0] / self.size[0]
-                # corrs[:, 3] *= orig_size[0] / self.size[0]
-
-                corrs[:, 0] *= orig_size[0] / self.size[0]
-                corrs[:, 2] *= orig_size[0] / self.size[0]
-                corrs[:, 1] *= orig_size[1] / self.size[1]
-                corrs[:, 3] *= orig_size[1] / self.size[1]
                 
                 num_matches[i][j] = num
                 num_matches[j][i] = num
-                Hs[i][j], mask_ij = cv2.findHomography(corrs[:, 0:2], corrs[:, 2:4], cv2.USAC_MAGSAC)
-                Hs[j][i], mask_ji = cv2.findHomography(corrs[:, 2:4], corrs[:, 0:2], cv2.USAC_MAGSAC)
+                Hs[i][j], mask_ij = cv2.findHomography(corrs[:, 0:2], corrs[:, 2:4], cv2.USAC_MAGSAC, 0.5)
+                Hs[j][i], mask_ji = cv2.findHomography(corrs[:, 2:4], corrs[:, 0:2], cv2.USAC_MAGSAC, 0.5)
                 inliers_ij = corrs[mask_ij.squeeze().astype('bool')]
-                inli = inliers_ij[inliers_ij[:, -1].argsort()[::-1]][:50, :-1]
-                inli = inli[inli[:, -1] > 0.99]
+
+                inli = inliers_ij[inliers_ij[:, -1].argsort()[::-1]][:15]
+                inli = inli[:, :-1]
+
                 inliers += [[i, j, *inl] for inl in inli]
                 
     
@@ -169,6 +186,9 @@ class Stitcher():
 
         if verbose:
             print(f'optimization done - {time() - s_time:.4}s')
+            print(f'num inliers - {len(inliers)}')
+            print(f'initial error - {init_error:.4}')
+            print(f'optimized error - {optim_error:.4}s')
         if logger:
             logger['optimization time'].append(time() - s_time)
             logger['initial error'].append(init_error)
@@ -181,6 +201,7 @@ class Stitcher():
         
         if verbose:
             print(f'stitching done - {time() - s_time:.4}s')
+            print(f'total_time - {time() - start_time:.4}s')
         if logger:
             logger['stitching time'].append(time() - s_time)
             logger['total time'].append(time() - start_time)
