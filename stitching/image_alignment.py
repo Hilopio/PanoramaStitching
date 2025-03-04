@@ -1,6 +1,6 @@
 import gc
 from pathlib import Path
-from typing import Iterable, List, Tuple, Union
+from typing import Iterable, List, Tuple
 
 import cv2
 import kornia.feature as KF
@@ -15,7 +15,7 @@ from scipy.optimize import least_squares
 def find_warp_params(
     transforms: List[np.ndarray], img_paths: Iterable[Path]
 ) -> np.ndarray:
-    pics = [cv2.imread(img_p).astype(np.float32) for img_p in img_paths]
+    pics = [cv2.imread(img_p) for img_p in img_paths]
     n = len(pics)
 
     # Initialize arrays to store original and transformed corner points
@@ -190,8 +190,6 @@ class Stitcher:
     def only_transforms(
         self,
         img_paths: Iterable[Path],
-        verbose: bool = False,
-        logger: Union[bool, dict[str, list]] = False,
     ) -> Image:
         self.img_paths = img_paths
         n = len(img_paths)
