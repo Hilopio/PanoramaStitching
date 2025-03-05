@@ -293,11 +293,11 @@ class Stitcher:
 
         while queryIdx:
             a = num_matches[queryIdx, :][:, targetIdx]
-            # curr, best_neighb = np.unravel_index(
-            #     np.argmax(a, axis=None), a.shape
-            # )
-            curr = np.argmax(a.sum(axis=1))
-            best_neighb = np.argmax(a[curr])
+            curr, best_neighb = np.unravel_index(
+                np.argmax(a, axis=None), a.shape
+            )
+            # curr = np.argmax(a.sum(axis=1))
+            # best_neighb = np.argmax(a[curr])
 
             H = (
                 transforms[targetIdx[best_neighb]]
@@ -309,21 +309,19 @@ class Stitcher:
             queryIdx.remove(Idx[curr])
             Idx.pop(curr)
 
-        self.transforms = [transforms[i] for i in targetIdx]
-        self.img_paths = [self.img_paths[i] for i in targetIdx]
-
-        reverse_permute = [0] * len(targetIdx)
-        for i, x in enumerate(targetIdx):
-            reverse_permute[x] = i
-
-        for i in range(len(inliers)):
-            inliers[i][0] = reverse_permute[inliers[i][0]]
-            inliers[i][1] = reverse_permute[inliers[i][1]]
-        pivot = 0
-
         # Optimize the transformations
         final_transforms, init_error, optim_error = optimize(
-            self.transforms, inliers, pivot
+            transforms, inliers, pivot
         )
+        # print('transforms')
+        # print(transforms)
+        # print('final_transforms')
+        # print(final_transforms)
+        T, panorama_size = find_translation_and_panorama_size(orig_sizes, final_transforms)
+        final_transforms = [T @ H for H in final_transforms]
 
-        return final_transforms
+        # reordering
+        # final_transforms = [final_transforms[i] for i in targetIdx]
+        # self.img_paths = [self.img_paths[i] for i in targetIdx]
+
+        return final_transforms, panorama_size

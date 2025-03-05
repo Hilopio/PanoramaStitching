@@ -6,11 +6,22 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-from image_alignment import Stitcher, find_warp_params
+# from image_alignment import Stitcher
+from im_al import Stitcher
+
+
+def _load_images(img_paths):
+    images = []
+    for path in img_paths:
+        img = Image.open(path)
+        img = np.array(img).astype(np.float32) / 255
+        images.append(img)
+
+    return images
 
 
 def stitch_collage(images, transforms, panorama_size):
-    panorama = np.zeros((*panorama_size[::-1], 3))
+    panorama = np.zeros((*panorama_size[::-1], 3), dtype=np.float32)
     for image, H in zip(images, transforms):
         cv2.warpPerspective(
             image,
@@ -20,8 +31,7 @@ def stitch_collage(images, transforms, panorama_size):
             flags=cv2.INTER_NEAREST,
             borderMode=cv2.BORDER_TRANSPARENT,
         )
-    print(panorama[:50, :50])
-    return panorama.astype('uint8')
+    return (panorama * 255).astype('uint8')
 
 
 def stitch_pano(input_dir, output_file, stchr):
@@ -31,15 +41,11 @@ def stitch_pano(input_dir, output_file, stchr):
         if img_p.suffix in (".jpg", ".png")
     ]
 
-    transforms = stchr.only_transforms(img_paths=img_paths)
-    # T, panorama_size = find_translation_and_panorama_size(sizes, transformations)
-    T, panorama_size, pics = find_warp_params(stchr.transforms, stchr.img_paths)
-    transforms = [T @ H for H in transforms]
+    transforms, panorama_size = stchr.only_transforms(img_paths=img_paths)
+    pics = _load_images(stchr.img_paths)
+    panorama_ans = stitch_collage(pics, transforms, panorama_size)  # stchr.transforms
 
-    panorama_ans = stitch_collage(pics, stchr.transforms, panorama_size)  # stchr.transforms
-    print(panorama_ans.shape, panorama_ans.dtype)
-    panorama_rgb = cv2.cvtColor(panorama_ans, cv2.COLOR_BGR2RGB)
-    output_img = Image.fromarray(panorama_rgb)
+    output_img = Image.fromarray(panorama_ans)
     output_img.save(output_file, quality=95)
 
 
