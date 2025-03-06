@@ -6,8 +6,7 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-# from image_alignment import Stitcher
-from im_al import Stitcher
+from image_alignment import Stitcher
 
 
 def _load_images(img_paths):
@@ -68,7 +67,7 @@ if __name__ == '__main__':
 
     if input_global_dir.exists() and input_global_dir.is_dir():
         # Iterate over inner directories
-        for inner_dir in tqdm(input_global_dir.iterdir()):
+        for inner_dir in tqdm(list(input_global_dir.iterdir())[:1]):
             if inner_dir.is_dir():
                 output_file = output_dir / Path(inner_dir.name + '-pano.jpg')
                 stitch_pano(inner_dir, output_file, stchr)

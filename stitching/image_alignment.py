@@ -12,58 +12,6 @@ from scipy.optimize import least_squares
 # from tqdm import tqdm
 
 
-def find_warp_params(
-    transforms: List[np.ndarray], img_paths: Iterable[Path]
-) -> np.ndarray:
-    pics = [cv2.imread(img_p) for img_p in img_paths]
-    n = len(pics)
-
-    # Initialize arrays to store original and transformed corner points
-    all_corners = np.empty((n, 4, 3))
-    for i in range(n):
-        # Define corner points for each image
-        all_corners[i] = [
-            [0, 0, 1],
-            [pics[i].shape[1], 0, 1],
-            [pics[i].shape[1], pics[i].shape[0], 1],
-            [0, pics[i].shape[0], 1],
-        ]
-
-    all_new_corners = np.empty((n, 4, 3))
-    for i in range(n):
-        # Apply homography transformations to each corner point
-        all_new_corners[i] = [
-            np.dot(transforms[i], corner) for corner in all_corners[i]
-        ]
-
-    # Reshape transformed corners for further processing
-    all_new_corners = all_new_corners.reshape(-3, 3)
-    x_news = all_new_corners[:, 0] / all_new_corners[:, 2]
-    y_news = all_new_corners[:, 1] / all_new_corners[:, 2]
-
-    # Determine min/max x and y coordinates for the panorama
-    y_min = min(y_news)
-    x_min = min(x_news)
-    y_max = int(round(max(y_news)))
-    x_max = int(round(max(x_news)))
-
-    # Calculate shifts to adjust the panorama's origin
-    x_shift = -min(x_min, 0)
-    y_shift = -min(y_min, 0)
-    T = np.array(
-        [[1, 0, x_shift], [0, 1, y_shift], [0, 0, 1]], dtype="float32"
-    )
-
-    # Calculate new dimensions for the panorama
-    x_min = int(round(x_min))
-    y_min = int(round(y_min))
-    height_new = y_max - y_min
-    width_new = x_max - x_min
-    size = (width_new, height_new)
-
-    return T, size, pics
-
-
 def find_translation_and_panorama_size(sizes, transformations):
     x_coords = []
     y_coords = []
@@ -241,11 +189,11 @@ class Stitcher:
         for batch_corr in all_corr:
             for i in range(batch_size):
                 idx = batch_corr["batch_indexes"] == i
+                if not idx.any():
+                    break
                 kp0 = batch_corr["keypoints0"][idx]
                 kp1 = batch_corr["keypoints1"][idx]
                 conf = batch_corr["confidence"][idx]
-                kp0 *= orig_sizes[i] / self.size
-                kp1 *= orig_sizes[i] / self.size
                 diff_corr.append(
                     np.concatenate([kp0, kp1, conf[..., None]], axis=-1)
                 )
@@ -253,10 +201,10 @@ class Stitcher:
         good_corrs = []
         for corrs in diff_corr:
             corrs = corrs[corrs[:, 4] > 0.9]
-            good_corrs.append(corrs)
+            good_corrs.append(corrs)  # сделать фильтрацией
 
         Hs = [[None] * n for _ in range(n)]
-        num_matches = np.zeros((n, n))
+        num_matches = np.zeros((n, n), dtype=int)
         for i in range(n - 1):
             for j in range(i + 1, n):
                 corrs = good_corrs.pop(0)
@@ -264,50 +212,56 @@ class Stitcher:
                 if num < 10:
                     continue
 
+                corrs[:, 0:2] *= orig_sizes[i] / self.size
+                corrs[:, 2:4] *= orig_sizes[j] / self.size
+
                 num_matches[i][j] = num
                 num_matches[j][i] = num
                 Hs[i][j], mask_ij = cv2.findHomography(
-                    corrs[:, 0:2], corrs[:, 2:4], cv2.USAC_MAGSAC, 0.5
+                    corrs[:, 0:2], corrs[:, 2:4], cv2.USAC_MAGSAC, 1.0
                 )
                 Hs[j][i], mask_ji = cv2.findHomography(
-                    corrs[:, 2:4], corrs[:, 0:2], cv2.USAC_MAGSAC, 0.5
+                    corrs[:, 2:4], corrs[:, 0:2], cv2.USAC_MAGSAC, 1.0
                 )
-                inliers_ij = corrs[mask_ij.squeeze().astype("bool")]
+                if mask_ij.shape[0] < 10:
+                    continue
 
+                inliers_ij = corrs[mask_ij.squeeze().astype("bool")]
                 inli = inliers_ij[inliers_ij[:, -1].argsort()[::-1]][:15]
                 inli = inli[:, :-1]
-
                 inliers += [[i, j, *inl] for inl in inli]
+
+                inliers_ji = corrs[mask_ji.squeeze().astype("bool")]
+                inli = inliers_ji[inliers_ji[:, -1].argsort()[::-1]][:15]
+                inli = inli[:, :-1]
+                inliers += [[j, i, *inl[2:4], *inl[0:2]] for inl in inli]
 
         # Initialize the transformations for each image
         transforms = [np.eye(3) for i in range(n)]
 
         queryIdx = [i for i in range(n)]
-        Idx = [i for i in range(n)]
         targetIdx = []
 
         pivot = np.argmax(num_matches.sum(axis=1))
         targetIdx.append(pivot)
         queryIdx.remove(pivot)
-        Idx.remove(pivot)
 
         while queryIdx:
             a = num_matches[queryIdx, :][:, targetIdx]
-            curr, best_neighb = np.unravel_index(
-                np.argmax(a, axis=None), a.shape
-            )
-            # curr = np.argmax(a.sum(axis=1))
-            # best_neighb = np.argmax(a[curr])
+            # curr, best_neighb = np.unravel_index(
+            #     np.argmax(a, axis=None), a.shape
+            # )
+            curr = np.argmax(a.sum(axis=1))
+            best_neighb = np.argmax(a[curr])
 
             H = (
                 transforms[targetIdx[best_neighb]]
-                @ Hs[Idx[curr]][targetIdx[best_neighb]]
+                @ Hs[queryIdx[curr]][targetIdx[best_neighb]]
             )
             H /= H[2, 2]
-            transforms[Idx[curr]] = H
-            targetIdx.append(Idx[curr])
-            queryIdx.remove(Idx[curr])
-            Idx.pop(curr)
+            transforms[queryIdx[curr]] = H
+            targetIdx.append(queryIdx[curr])
+            queryIdx.pop(curr)
 
         # Optimize the transformations
         final_transforms, init_error, optim_error = optimize(
@@ -317,6 +271,7 @@ class Stitcher:
         # print(transforms)
         # print('final_transforms')
         # print(final_transforms)
+
         T, panorama_size = find_translation_and_panorama_size(orig_sizes, final_transforms)
         final_transforms = [T @ H for H in final_transforms]
 

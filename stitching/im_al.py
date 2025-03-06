@@ -1,4 +1,5 @@
 import gc
+import os
 import cv2
 import kornia.feature as KF
 import numpy as np
@@ -8,31 +9,67 @@ from PIL import Image
 from scipy.optimize import least_squares
 
 
-def find_translation_and_panorama_size(sizes, transformations):
-    x_coords = []
-    y_coords = []
-    for size, H in zip(sizes, transformations):
-        corners = np.array([
+def transform_and_stitch(transforms, directory):
+    pic_names = os.listdir(directory)
+    n = len(pic_names)
+    pics = []
+    for name in pic_names:
+        img = cv2.imread(os.path.join(directory, name)).astype(np.float32)
+        pics.append(img)
+
+    all_corners = np.empty((n, 4, 3))
+    for i in range(n):
+        all_corners[i] = [
             [0, 0, 1],
-            [0, size[1], 1],
-            [size[0], 0, 1],
-            [size[0], size[1], 1]
-        ])
-        new_corners = H @ corners.T
+            [pics[i].shape[1], 0, 1],
+            [pics[i].shape[1], pics[i].shape[0], 1],
+            [0, pics[i].shape[0], 1],
+        ]
 
-        new_corners /= new_corners[2]
-        x_coords += new_corners[0].tolist()
-        y_coords += new_corners[1].tolist()
+    all_new_corners = np.empty((n, 4, 3))
+    for i in range(n):
+        all_new_corners[i] = [
+            np.dot(transforms[i], corner) for corner in all_corners[i]
+        ]
 
-    x_min, x_max = np.min(x_coords), np.max(x_coords)
-    y_min, y_max = np.min(y_coords), np.max(y_coords)
+    all_new_corners = all_new_corners.reshape(-3, 3)
+    x_news = all_new_corners[:, 0] / all_new_corners[:, 2]
+    y_news = all_new_corners[:, 1] / all_new_corners[:, 2]
 
-    T = np.array([[1, 0, -x_min],
-                  [0, 1, -y_min],
-                  [0, 0, 1]])
+    y_min = min(y_news)
+    x_min = min(x_news)
+    y_max = int(round(max(y_news)))
+    x_max = int(round(max(x_news)))
 
-    panorama_size = (int(np.ceil(x_max - x_min)), int(np.ceil(y_max - y_min)))
-    return T, panorama_size
+    x_shift = -min(x_min, 0)
+    y_shift = -min(y_min, 0)
+    T = np.array([[1, 0, x_shift], [0, 1, y_shift], [0, 0, 1]], dtype="float32")
+
+    x_min = int(round(x_min))
+    y_min = int(round(y_min))
+
+    height_new = y_max - y_min
+    width_new = x_max - x_min
+    size = (width_new, height_new)
+
+    panorama_ans = cv2.warpPerspective(
+        src=pics[0],
+        M=T @ transforms[0],
+        dsize=size,
+        flags=cv2.INTER_NEAREST,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(-1, -1, -1),
+    )
+    for i in range(1, n):
+        cv2.warpPerspective(
+            pics[i],
+            T @ transforms[i],
+            size,
+            panorama_ans,
+            flags=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_TRANSPARENT,
+        )
+    return panorama_ans
 
 
 def transform_from_vec(vec: np.ndarray, i: int, pivot: int) -> np.ndarray:
@@ -134,22 +171,34 @@ class Stitcher():
         self.matcher = KF.LoFTR(pretrained="outdoor").to(self.device)
         self.size = np.array((600, 400))
 
-    def _load_torch_tensors(self, img_paths):
+    def preprocess(self, img_paths):
+        """Opens images from paths, saves the original dimensions,
+          converts the images to the required format, and collects them into a list
+
+        Args:
+            img_paths : paths to images
+
+        Returns:
+            list of original sizes of images, list of torch.Tensor of size [1, 1, 600, 400]
+        """
         images = []
         orig_sizes = []
         for path in img_paths:
-            img = Image.open(path).convert("L")  # Convert to grayscale
-            orig_sizes.append(np.array(img.size))  # Save the original size
-            img = img.resize((600, 400), resample=Image.Resampling.LANCZOS)
+            img = Image.open(path).convert('L')
+            orig_sizes.append(np.array(img.size))
+            img = img.resize(self.size, resample=Image.Resampling.LANCZOS)
             img = torchvision.transforms.functional.pil_to_tensor(img)
             img = img.unsqueeze(dim=0)
-            images.append(img)  # Append the processed tensor to the list
+            images.append(img)
 
         return orig_sizes, images
 
-    def Stitch(self, img_paths):
-        n = len(img_paths)
-        orig_sizes, images = self._load_torch_tensors(img_paths)
+    def Stitch(self, directory, outputfile):
+        pic_names = os.listdir(directory)
+        img_paths = [os.path.join(directory, name) for name in pic_names]
+        n = len(pic_names)
+
+        orig_sizes, images = self.preprocess(img_paths)
 
         batch1 = []
         batch2 = []
@@ -242,7 +291,6 @@ class Stitcher():
             Idx.pop(curr)
 
         final_transforms, init_error, optim_error = optimization(transforms, inliers, pivot)
-        T, panorama_size = find_translation_and_panorama_size(orig_sizes, final_transforms)
-        final_transforms = [T @ H for H in final_transforms]
-
-        return final_transforms, panorama_size
+        panorama_ans = transform_and_stitch(final_transforms, directory)
+        final_pic = panorama_ans.astype('uint8')
+        cv2.imwrite(outputfile, final_pic)
