@@ -5,8 +5,7 @@ import argparse
 from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
-
-from image_alignment import Stitcher
+import pickle
 
 
 def _load_images(img_paths):
@@ -33,43 +32,40 @@ def stitch_collage(images, transforms, panorama_size):
     return (panorama * 255).astype('uint8')
 
 
-def stitch_pano(input_dir, output_file, stchr):
-    img_paths = [
-        img_p
-        for img_p in input_dir.iterdir()
-        if img_p.suffix in (".jpg", ".png")
-    ]
+def stitch_pano(transforms_file, output_file):
 
-    transforms, panorama_size = stchr.only_transforms(img_paths=img_paths)
-    pics = _load_images(stchr.img_paths)
-    panorama_ans = stitch_collage(pics, transforms, panorama_size)  # stchr.transforms
+    with open(transforms_file, "rb") as f:
+        loaded_data = pickle.load(f)
+
+    transforms = loaded_data["transforms"]
+    panorama_size = loaded_data["panorama_size"]
+    img_paths = loaded_data["img_paths"]
+
+    pics = _load_images(img_paths)
+    panorama_ans = stitch_collage(pics, transforms, panorama_size)
 
     output_img = Image.fromarray(panorama_ans)
     output_img.save(output_file, quality=95)
 
 
 if __name__ == '__main__':
-    device = 'cuda:5'
-    stchr = Stitcher(device=device)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_global_dir', type=str)
+    parser.add_argument('transforms_dir', type=str)
     parser.add_argument('output_dir', type=str)
 
     args = parser.parse_args()
 
-    input_global_dir = Path(args.input_global_dir)
+    transforms_dir = Path(args.transforms_dir)
     output_dir = Path(args.output_dir)
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if input_global_dir.exists() and input_global_dir.is_dir():
-        # Iterate over inner directories
-        for inner_dir in tqdm(input_global_dir.iterdir()):
-            if inner_dir.is_dir():
-                output_file = output_dir / Path(inner_dir.name + '-pano.jpg')
-                stitch_pano(inner_dir, output_file, stchr)
+    if transforms_dir.exists() and transforms_dir.is_dir():
+        for transforms_file in tqdm(transforms_dir.iterdir()):
+            output_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-pano.jpg"))
+            stitch_pano(transforms_file, output_file)
     else:
-        print(f"Directory '{input_global_dir}' does not exist or is not a directory.")
+        print(f"Directory '{transforms_dir}' does not exist or is not a directory.")

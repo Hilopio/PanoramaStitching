@@ -139,7 +139,6 @@ class Stitcher:
         self,
         img_paths: Iterable[Path],
     ) -> Image:
-        self.img_paths = img_paths
         n = len(img_paths)
         orig_sizes, images = self._load_torch_tensors(img_paths)
 
@@ -189,7 +188,7 @@ class Stitcher:
         for batch_corr in all_corr:
             for i in range(batch_size):
                 idx = batch_corr["batch_indexes"] == i
-                if not idx.any():
+                if not idx.any():  # мб баг
                     break
                 kp0 = batch_corr["keypoints0"][idx]
                 kp1 = batch_corr["keypoints1"][idx]
@@ -200,7 +199,7 @@ class Stitcher:
 
         good_corrs = []
         for corrs in diff_corr:
-            corrs = corrs[corrs[:, 4] > 0.9]
+            corrs = corrs[corrs[:, 4] > 0.95]
             good_corrs.append(corrs)  # сделать фильтрацией
 
         Hs = [[None] * n for _ in range(n)]
@@ -218,23 +217,30 @@ class Stitcher:
                 num_matches[i][j] = num
                 num_matches[j][i] = num
                 Hs[i][j], mask_ij = cv2.findHomography(
-                    corrs[:, 0:2], corrs[:, 2:4], cv2.USAC_MAGSAC, 1.0
-                )
-                Hs[j][i], mask_ji = cv2.findHomography(
-                    corrs[:, 2:4], corrs[:, 0:2], cv2.USAC_MAGSAC, 1.0
+                    corrs[:, 0:2], corrs[:, 2:4], cv2.USAC_MAGSAC, 0.75
                 )
                 if mask_ij.shape[0] < 10:
                     continue
+
+                # try:
+                #     Hs[j][i] = np.linalg.inv(Hs[i][j])
+                #     Hs[j][i] /= Hs[j][i][2, 2]
+                # except:
+                #     Hs = np.eye(3)
+
+                Hs[j][i], mask_ji = cv2.findHomography(
+                    corrs[:, 2:4], corrs[:, 0:2], cv2.USAC_MAGSAC, 0.75
+                )
 
                 inliers_ij = corrs[mask_ij.squeeze().astype("bool")]
                 inli = inliers_ij[inliers_ij[:, -1].argsort()[::-1]][:15]
                 inli = inli[:, :-1]
                 inliers += [[i, j, *inl] for inl in inli]
 
-                inliers_ji = corrs[mask_ji.squeeze().astype("bool")]
-                inli = inliers_ji[inliers_ji[:, -1].argsort()[::-1]][:15]
-                inli = inli[:, :-1]
-                inliers += [[j, i, *inl[2:4], *inl[0:2]] for inl in inli]
+                # inliers_ji = corrs[mask_ji.squeeze().astype("bool")]
+                # inli = inliers_ji[inliers_ji[:, -1].argsort()[::-1]][:15]
+                # inli = inli[:, :-1]
+                # inliers += [[j, i, *inl[2:4], *inl[0:2]] for inl in inli]
 
         # Initialize the transformations for each image
         transforms = [np.eye(3) for i in range(n)]
@@ -267,6 +273,7 @@ class Stitcher:
         final_transforms, init_error, optim_error = optimize(
             transforms, inliers, pivot
         )
+        print(f'errors: (before){init_error:.5} : (after){optim_error:.5}')
         # print('transforms')
         # print(transforms)
         # print('final_transforms')
@@ -277,6 +284,7 @@ class Stitcher:
 
         # reordering
         # final_transforms = [final_transforms[i] for i in targetIdx]
-        # self.img_paths = [self.img_paths[i] for i in targetIdx]
+        # img_paths = [img_paths[i] for i in targetIdx]
+        new_img_paths = [path for path in img_paths]
 
-        return final_transforms, panorama_size
+        return final_transforms, panorama_size, new_img_paths
