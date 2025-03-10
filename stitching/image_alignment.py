@@ -273,18 +273,11 @@ class Stitcher:
         final_transforms, init_error, optim_error = optimize(
             transforms, inliers, pivot
         )
-        print(f'errors: (before){init_error:.5} : (after){optim_error:.5}')
-        # print('transforms')
-        # print(transforms)
-        # print('final_transforms')
-        # print(final_transforms)
 
         T, panorama_size = find_translation_and_panorama_size(orig_sizes, final_transforms)
         final_transforms = [T @ H for H in final_transforms]
 
         # reordering
-        # final_transforms = [final_transforms[i] for i in targetIdx]
-        # img_paths = [img_paths[i] for i in targetIdx]
-        new_img_paths = [path for path in img_paths]
-
+        final_transforms = [final_transforms[i] for i in targetIdx]
+        new_img_paths = [img_paths[i] for i in targetIdx]
         return final_transforms, panorama_size, new_img_paths
