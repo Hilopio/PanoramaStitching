@@ -658,7 +658,7 @@ def stitch_pano(input_dir, output_file, stchr):
 
     transforms = stchr.only_transforms(img_paths=img_paths, verbose=False)
     T, size, pics = find_warp_params(stchr.transforms, stchr.img_paths)
-    panorama_ans = warp_coarse_to_fine(T, size, pics, transforms)  # stchr.transforms
+    panorama_ans = warp_coarse_to_fine(T, size, pics, stchr.transforms)
     panorama_rgb = cv2.cvtColor(panorama_ans, cv2.COLOR_BGR2RGB)
     output_img = Image.fromarray(panorama_rgb.astype("uint8"))
     output_img.save(output_file, quality=95)
@@ -685,15 +685,7 @@ if __name__ == '__main__':
         # Iterate over inner directories
         for inner_dir in tqdm(input_global_dir.iterdir()):
             if inner_dir.is_dir():
-                output_file = output_dir / Path(inner_dir.name + '-pano.jpg')
+                output_file = output_dir / Path(inner_dir.name + '-pano0.jpg')
                 stitch_pano(inner_dir, output_file, stchr)
     else:
         print(f"Directory '{input_global_dir}' does not exist or is not a directory.")
-
-
-# поменять диапазон пикселей от 0 до 1
-# разобраться с transforms и stchr.transforms
-# вставить этап трансляции в общий пайплайн нахождения гомографий
-# проверить порядок подклейки, понять какие возникают сложности при наложении
-# убрать проверку нового изображения на < 1% новых пикселей засчет того чтобы прибавлять sure к маске лейблов (или нет)
-# решить проблему borderValue через 4 канал или через значение вне диапазона пикселей

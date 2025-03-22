@@ -1,10 +1,38 @@
+import numpy as np
+import cv2
 import shutil
 import argparse
 from pathlib import Path
+from PIL import Image
 from tqdm import tqdm
 import pickle
 
+
 from image_alignment import Stitcher
+
+
+def _load_images(img_paths):
+    images = []
+    for path in img_paths:
+        img = Image.open(path)
+        img = np.array(img).astype(np.float32) / 255
+        images.append(img)
+
+    return images
+
+
+def stitch_collage(images, transforms, panorama_size):
+    panorama = np.zeros((*panorama_size[::-1], 3), dtype=np.float32)
+    for image, H in zip(images, transforms):
+        cv2.warpPerspective(
+            image,
+            H,
+            panorama_size,
+            panorama,
+            flags=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_TRANSPARENT,
+        )
+    return (panorama * 255).astype('uint8')
 
 
 def find_and_save_transforms(input_dir, output_file, stchr):

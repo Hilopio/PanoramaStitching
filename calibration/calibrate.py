@@ -27,9 +27,10 @@ def fix_dir(in_dir, out_dir):
 
 
 def fix_image(in_path, out_path):
+    print(in_path)
     image = cv2.imread(in_path)
     undistorted_image = cv2.undistort(image, camera_matrix, dist_coeffs, None, new_camera_matrix)
-    cv2.imwrite(out_path, undistorted_image, [cv2.IMWRITE_JPEG_QUALITY, 98])
+    cv2.imwrite(out_path, undistorted_image)
 
 
 if __name__ == '__main__':

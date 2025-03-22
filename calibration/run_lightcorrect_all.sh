@@ -13,10 +13,7 @@
 #   MIRROR_FILE  - Path to the mirror file used for illumination correction.
 #
 # Example:
-#   ./run_lightcorrect_all.sh /home/data_repository/LumenStone/P1 ~/pano/data/P1-lightfixed ./calibration_params/mirror1200.jpg
-#
-# May need:
-# sed -i 's/\r$//' ./run_lightcorrect_all.sh
+#   ./run_lightcorrect_all.sh ../../data_repository/LumenStone/P1 ../panoraming/P1-lightcor petroscope/examples/data/mirror1200.jpg
 
 # Проверка количества аргументов
 if [ "$#" -ne 3 ]; then

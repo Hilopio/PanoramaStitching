@@ -15,9 +15,9 @@ def warp_img(img, H, panorama_size):
         img,
         H,
         panorama_size,
-        flags=cv2.INTER_LANCZOS4,
+        flags=cv2.INTER_LINEAR,  # улучшить интерполяцию
         borderMode=cv2.BORDER_CONSTANT,
-        borderValue=borderValue
+        borderValue=(borderValue, borderValue, borderValue)
     )
     return warped_img
 
@@ -59,40 +59,41 @@ def stitch_collage(images, transforms, panorama_size):
 
 
 def find_color_scale(targetImg, queryImg, overlap_mask, gamma):
-    eps = 1e-3
-    targetColor = ((targetImg[overlap_mask] + eps) ** gamma).mean(axis=0)
-    queryColor = ((queryImg[overlap_mask] + eps) ** gamma).mean(axis=0)
-    print(f'targetColor = {targetColor}')
+    targetColor = (targetImg[overlap_mask] ** gamma).mean(axis=0)
+    queryColor = (queryImg[overlap_mask] ** gamma).mean(axis=0)
     return targetColor / queryColor
 
 
 def stitch_lightcompensated_collage(images, transforms, panorama_size):
     gamma = 2.2
-    eps = 1e-5
-    color_scales = [(1, 1, 1),]
+    color_scales = [np.array((1, 1, 1)),]
     panorama = warp_img(images[0], transforms[0], panorama_size)
     panorama_mask = warp_mask(np.ones(images[0].shape[:-1], dtype=int), transforms[0], panorama_size)
     for image, H in zip(images[1:], transforms[1:]):
         warped_mask = warp_mask(np.ones(image.shape[:-1], dtype=int), H, panorama_size)
         overlap_mask = panorama_mask & warped_mask
-        assert np.any(overlap_mask)
-
         warped_img = warp_img(image, H, panorama_size)
         curr_color_scale = find_color_scale(panorama, warped_img, overlap_mask, gamma)
         color_scales.append(curr_color_scale)
         panorama_mask = np.where(panorama_mask, panorama_mask, warped_mask)
         panorama = np.where(
             warped_mask[..., np.newaxis],
-            warped_img * (curr_color_scale + eps) ** (1 / gamma),
+            warped_img * curr_color_scale ** (1 / gamma),
             panorama
         )
+    color_scales = np.array(color_scales)
+    global_comp_scale = color_scales.sum(axis=0) / (color_scales ** 2).sum(axis=0)
 
-    print(color_scales)
+    panorama = np.where(
+        panorama_mask[..., np.newaxis],
+        panorama * global_comp_scale ** (1 / gamma),
+        (borderValue, borderValue, borderValue)
+    )
+
     return (panorama.clip(0, 1) * 255).astype('uint8')
 
 
 def stitch_pano(transforms_file, output_file):
-
     with open(transforms_file, "rb") as f:
         loaded_data = pickle.load(f)
 
@@ -101,7 +102,8 @@ def stitch_pano(transforms_file, output_file):
     img_paths = loaded_data["img_paths"]
 
     pics = _load_images(img_paths)
-    panorama_ans = stitch_lightcompensated_collage(pics, transforms, panorama_size)
+    panorama_ans = stitch_collage(pics, transforms, panorama_size)
+    # panorama_ans = stitch_lightcompensated_collage(pics, transforms, panorama_size)
 
     output_img = Image.fromarray(panorama_ans)
     output_img.save(output_file, quality=95)

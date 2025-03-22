@@ -14,9 +14,6 @@
 #
 # Example:
 #   ./run_undistort_all.sh /path/to/input /path/to/output /path/to/data
-#
-# May need:
-# sed -i 's/\r$//' ./run_undistort_all.sh
 
 
 # Проверка количества аргументов
