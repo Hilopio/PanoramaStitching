@@ -41,7 +41,8 @@ def find_and_save_transforms(input_dir, output_file, stchr):
         for img_p in input_dir.iterdir()
         if img_p.suffix in (".jpg", ".png")
     ]
-
+    img_paths.sort()
+    
     transforms, panorama_size, new_img_paths = stchr.only_transforms(img_paths=img_paths)
 
     data_to_save = {

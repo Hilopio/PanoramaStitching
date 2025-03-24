@@ -294,3 +294,5 @@ class Stitcher():
         panorama_ans = transform_and_stitch(final_transforms, directory)
         final_pic = panorama_ans.astype('uint8')
         cv2.imwrite(outputfile, final_pic)
+# видимо что-то неактуальное
+

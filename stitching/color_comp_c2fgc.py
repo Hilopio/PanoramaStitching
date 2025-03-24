@@ -10,7 +10,7 @@ from scipy.optimize import least_squares, Bounds
 
 from graph_cutting import coarse_to_fine_optimal_seam, find_overlap_region
 
-borderValue = 1.0
+borderValue = 0.0
 
 
 def warp_img(img, H, panorama_size):
@@ -128,7 +128,6 @@ def stitch_experiment(images, transforms, panorama_size, output_file):
     res = least_squares(fun, g, method="lm", xtol=1e-6, ftol=1e-6, args=(Means, Numbers))
     print('final error = ', (fun(res.x, Means, Numbers) ** 2).mean() ** 0.5)
     g = res.x.reshape(n)
-    print('g = ', g)
     images = [img * g[i] for i, img in enumerate(images)]
 
     # pano = stitch_collage(images, transforms, panorama_size)
@@ -214,15 +213,16 @@ def stitch_experiment(images, transforms, panorama_size, output_file):
 
 
 if __name__ == '__main__':
-    transforms_dir = Path('/home/g.nikolaev/pano/data/P1-bad-transforms')
-    output_dir = Path('/home/g.nikolaev/pano/data/experiments-panos')
+    transforms_dir = Path('../data/P1-transforms-ffc')
+    output_dir = Path('../data/P1-gaincomp_graphcut-ffc')
+
 
     if not output_dir.exists():
         output_dir.mkdir(parents=True, exist_ok=True)
 
     for transforms_file in tqdm(transforms_dir.iterdir()):
         transforms_path = transforms_dir / transforms_file
-        output_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-optim-Lowe.jpg"))
+        output_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-pano.jpg"))
 
         with open(transforms_file, "rb") as f:
             loaded_data = pickle.load(f)

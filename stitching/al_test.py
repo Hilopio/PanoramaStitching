@@ -36,3 +36,4 @@ if __name__ == '__main__':
                 stitch_pano(inner_dir, output_file, stchr)
     else:
         print(f"Directory '{input_global_dir}' does not exist or is not a directory.")
+# видимо что-то неактуальное

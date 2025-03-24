@@ -100,6 +100,8 @@ def stitch_pano(transforms_file, output_file):
     transforms = loaded_data["transforms"]
     panorama_size = loaded_data["panorama_size"]
     img_paths = loaded_data["img_paths"]
+    # for path in img_paths:
+        # print(path.name)
 
     pics = _load_images(img_paths)
     panorama_ans = stitch_collage(pics, transforms, panorama_size)
@@ -125,6 +127,7 @@ if __name__ == '__main__':
     if transforms_dir.exists() and transforms_dir.is_dir():
         for transforms_file in tqdm(transforms_dir.iterdir()):
             output_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-pano.jpg"))
+            # print(transforms_file.name)
             stitch_pano(transforms_file, output_file)
     else:
         print(f"Directory '{transforms_dir}' does not exist or is not a directory.")
