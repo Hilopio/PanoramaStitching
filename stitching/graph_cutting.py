@@ -1,8 +1,10 @@
 import numpy as np
 import cv2
 import maxflow
+import pickle
+from PIL import Image
 
-borderValue = 1
+borderValue = 0.0
 
 def compute_overlap_mask(img1, img2):
     mask1 = np.any(img1 != borderValue, axis=2)
@@ -138,7 +140,7 @@ def coarse_to_fine_optimal_seam(img1, img2, small_in_wide_slice, coarse_scale=8,
     return fine_labels
 
 
-def warp_coarse_to_fine(images, transforms, panorama_size):
+def _warp_coarse_to_fine(images, transforms, panorama_size):
     n = len(images)
     panorama_ans = warp(images[0], transforms[0], panorama_size)
 
@@ -157,4 +159,27 @@ def warp_coarse_to_fine(images, transforms, panorama_size):
         panorama_ans = np.where(mask1[..., np.newaxis], panorama_ans, warped_pic)
         panorama_ans[wide_window_slice] = np.where(labels[..., np.newaxis], inter1, inter2)
 
-    return panorama_ans
+    return (panorama_ans.clip(0, 1) * 255).astype(np.uint8)
+
+def _load_images(img_paths):
+    images = []
+    for path in img_paths:
+        img = Image.open(path)
+        img = np.array(img).astype(np.float32) / 255
+        images.append(img)
+
+    return images
+
+def stitch_graphcut(transforms_file, output_file):
+
+    with open(transforms_file, "rb") as f:
+        loaded_data = pickle.load(f)
+        transforms = loaded_data["transforms"]
+        panorama_size = loaded_data["panorama_size"]
+        img_paths = loaded_data["img_paths"]
+
+    pics = _load_images(img_paths)
+    pano = _warp_coarse_to_fine(pics, transforms, panorama_size)
+
+    output_img = Image.fromarray(pano)
+    output_img.save(output_file, quality=95)

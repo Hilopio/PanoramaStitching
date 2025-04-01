@@ -56,7 +56,7 @@ def find_and_save_transforms(input_dir, output_file, stchr):
 
 
 if __name__ == '__main__':
-    device = 'cuda:5'
+    device = 'cuda:6'
     stchr = Stitcher(device=device)
 
     parser = argparse.ArgumentParser()

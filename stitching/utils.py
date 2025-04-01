@@ -1,0 +1,56 @@
+import cv2
+import numpy as np
+from PIL import Image
+
+borderValue = 0.0
+
+def _load_images(img_paths):
+    images = []
+    for path in img_paths:
+        img = Image.open(path)
+        img = np.array(img).astype(np.float32) / 255
+        images.append(img)
+
+    return images
+
+
+def _warp_collage(images, transforms, panorama_size):
+    panorama = np.zeros((*panorama_size[::-1], 3), dtype=np.float32)
+    for image, H in zip(images, transforms):
+        cv2.warpPerspective(
+            image,
+            H,
+            panorama_size,
+            panorama,
+            flags=cv2.INTER_NEAREST,
+            borderMode=cv2.BORDER_TRANSPARENT,
+        )
+
+    return (panorama.clip(0, 1) * 255).astype('uint8')
+
+def _warp_img(img, H, panorama_size):
+    warped_img = cv2.warpPerspective(
+        img,
+        H,
+        panorama_size,
+        flags=cv2.INTER_NEAREST,  # улучшить интерполяцию
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(borderValue, borderValue, borderValue)
+    )
+    return warped_img
+
+def _warp_mask(mask, H, panorama_size):
+    warped_mask = cv2.warpPerspective(
+        mask,
+        H,
+        panorama_size,
+        flags=cv2.INTER_NEAREST,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0
+    ).astype('bool')
+    return warped_mask
+
+def _warp(image, H, panorama_size):
+    warped_mask = _warp_mask(np.ones(image.shape[:-1], dtype=int), H, panorama_size)
+    warped_img = _warp_img(image, H, panorama_size)
+    return warped_img, warped_mask

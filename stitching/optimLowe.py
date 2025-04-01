@@ -8,6 +8,8 @@ from tqdm import tqdm
 import pickle
 from scipy.optimize import least_squares, Bounds
 
+from utils import _load_images, _warp_collage
+
 borderValue = 1.0
 
 
@@ -44,28 +46,6 @@ def save_current(img, history_dir, name):
     path = history_dir / Path(name + '.jpg')
     img = (img.clip(0, 1) * 255).astype('uint8')
     Image.fromarray(img).save(path)
-
-def _load_images(img_paths):
-    images = []
-    for path in img_paths:
-        img = Image.open(path)
-        img = np.array(img).astype(np.float32) / 255
-        images.append(img)
-
-    return images
-
-def stitch_collage(images, transforms, panorama_size):
-    panorama = np.zeros((*panorama_size[::-1], 3), dtype=np.float32)
-    for image, H in zip(images, transforms):
-        cv2.warpPerspective(
-            image,
-            H,
-            panorama_size,
-            panorama,
-            flags=cv2.INTER_NEAREST,
-            borderMode=cv2.BORDER_TRANSPARENT,
-        )
-    return (panorama.clip(0, 1) * 255).astype('uint8')
 
 
 # def fun(g, Means, Numbers):
@@ -184,7 +164,7 @@ def stitch_experiment(images, transforms, panorama_size, output_file):
 
     images = [img * (1 + g[i]) for i, img in enumerate(images)]
 
-    pano = stitch_collage(images, transforms, panorama_size)
+    pano = _warp_collage(images, transforms, panorama_size)
     Image.fromarray(pano).save(output_file, quality=95)
 
 
