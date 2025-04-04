@@ -17,7 +17,7 @@ def warp_img(img, H, panorama_size):
         img,
         H,
         panorama_size,
-        flags=cv2.INTER_LINEAR,  # улучшить интерполяцию
+        flags=cv2.INTER_NEAREST,  # улучшить интерполяцию
         borderMode=cv2.BORDER_CONSTANT,
         borderValue=(borderValue, borderValue, borderValue)
     )
@@ -92,7 +92,7 @@ def gain_compensation(images, transforms, panorama_size):
     images = [img * (1 + res.x[i]) for i, img in enumerate(images)]
     return images
 
-def stitch_gaincomp_collage(transforms_file, output_file):
+def stitch_collage_gaincomp(transforms_file, output_file):
 
     with open(transforms_file, "rb") as f:
         loaded_data = pickle.load(f)
@@ -128,7 +128,7 @@ if __name__ == '__main__':
         for transforms_file in tqdm(transforms_dir.iterdir()):
 
             collage_gaincomp_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-gaincomp-collage.jpg"))
-            stitch_gaincomp_collage(transforms_file, collage_gaincomp_file)
+            stitch_collage_gaincomp(transforms_file, collage_gaincomp_file)
 
     else:
         print(f"Directory '{transforms_dir}' does not exist or is not a directory.")

@@ -24,21 +24,24 @@ if __name__ == '__main__':
 
     if transforms_dir.exists() and transforms_dir.is_dir():
         for transforms_file in tqdm(transforms_dir.iterdir()):
+            # try:
+            # collage_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-collage.jpg"))
+            # stitch_collage(transforms_file, collage_file)
 
-            collage_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-collage.jpg"))
-            stitch_collage(transforms_file, collage_file)
+            # collage_gaincomp_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-collage-gaincomp.jpg"))
+            # stitch_collage_gaincomp(transforms_file, collage_gaincomp_file)
 
-            collage_gaincomp_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-collage-gaincomp.jpg"))
-            stitch_collage_gaincomp(transforms_file, collage_gaincomp_file)
+            # graphcut_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-graphcut.jpg"))
+            # stitch_graphcut(transforms_file, graphcut_file)
 
-            graphcut_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-graphcut.jpg"))
-            stitch_graphcut(transforms_file, graphcut_file)
-
-            graphcut_gaincomp_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-graphcut-gaincomp.jpg"))
-            stitch_graphcut_gaincomp(transforms_file, graphcut_gaincomp_file)
+            # graphcut_gaincomp_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-graphcut-gaincomp.jpg"))
+            # stitch_graphcut_gaincomp(transforms_file, graphcut_gaincomp_file)
 
             full_pipeline_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-pano.jpg"))
             stitch_full_pipeline(transforms_file, full_pipeline_file)
+
+            # except:
+            #     print(f"Error while processing file {transforms_file}")
 
     else:
         print(f"Directory '{transforms_dir}' does not exist or is not a directory.")

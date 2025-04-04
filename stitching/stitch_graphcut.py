@@ -3,14 +3,11 @@ import cv2
 import maxflow
 import pickle
 from PIL import Image
+import matplotlib.pyplot as plt
+from pathlib import Path
+from utils import _load_images, _warp
 
 borderValue = 0.0
-
-def compute_overlap_mask(img1, img2):
-    mask1 = np.any(img1 != borderValue, axis=2)
-    mask2 = np.any(img2 != borderValue, axis=2)
-    return mask1 & mask2
-
 
 def diff(img1, img2):
     diff = np.sum((img1 - img2) ** 2, axis=2)
@@ -54,9 +51,9 @@ def GraphCut(img1, img2, only1_mask, only2_mask):
     return lbls_mask
 
 
-def find_overlap_region(img1, img2, eps=200):
-    h, w = img1.shape[:2]
-    overlap_mask = compute_overlap_mask(img1, img2)
+def find_overlap_region(mask1, mask2, eps=200):
+    h, w = mask1.shape
+    overlap_mask = mask1 & mask2
     overlap_idx = np.nonzero(overlap_mask)
     assert overlap_idx[0].size != 0, "нет области пересечения"
 
@@ -116,10 +113,11 @@ def warp(img, H, panorama_size):
     return warped
 
 
-def coarse_to_fine_optimal_seam(img1, img2, small_in_wide_slice, coarse_scale=8, fine_scale=2, lane_width=200):
-    overlap_mask = compute_overlap_mask(img1, img2)
-    only1 = np.any(img1 != borderValue, axis=2) & np.logical_not(overlap_mask)
-    only2 = np.any(img2 != borderValue, axis=2) & np.logical_not(overlap_mask)
+def coarse_to_fine_optimal_seam(img1, img2, mask1, mask2, small_in_wide_slice,
+                                 coarse_scale=8, fine_scale=2, lane_width=200):
+    overlap_mask = mask1 & mask2
+    only1 = mask1 & np.logical_not(overlap_mask)
+    only2 = mask2 & np.logical_not(overlap_mask)
 
     if only2.sum() < 0.01 * only2.size:
         return np.ones(img1.shape[:2], dtype='float32')
@@ -142,33 +140,28 @@ def coarse_to_fine_optimal_seam(img1, img2, small_in_wide_slice, coarse_scale=8,
 
 def _warp_coarse_to_fine(images, transforms, panorama_size):
     n = len(images)
-    panorama_ans = warp(images[0], transforms[0], panorama_size)
+    pano, pano_mask = _warp(images[0], transforms[0], panorama_size)
+    img_indexes = pano_mask.astype('int8') - np.ones_like(pano_mask, dtype='int8')
 
     for i in range(1, n):
-        warped_pic = warp(images[i], transforms[i], panorama_size)
+        warped_img, warped_mask = _warp(images[i], transforms[i], panorama_size)
 
-        small_window_slice, wide_window_slice, small_in_wide_slice = find_overlap_region(panorama_ans, warped_pic)
+        small_window_slice, wide_window_slice, small_in_wide_slice = find_overlap_region(pano_mask, warped_mask)
 
-        inter1 = panorama_ans[wide_window_slice]
-        inter2 = warped_pic[wide_window_slice]
+        inter_img1 = pano[wide_window_slice]
+        inter_mask1 = pano_mask[wide_window_slice]
+        inter_img2 = warped_img[wide_window_slice]
+        inter_mask2 = warped_mask[wide_window_slice]
 
-        labels = coarse_to_fine_optimal_seam(inter1, inter2, small_in_wide_slice,
-                                             coarse_scale=16, fine_scale=4, lane_width=200)
+        labels = coarse_to_fine_optimal_seam(inter_img1, inter_img2, inter_mask1, inter_mask2, 
+                                             small_in_wide_slice, coarse_scale=16, fine_scale=4, lane_width=200)
 
-        mask1 = np.any(panorama_ans != borderValue, axis=2)
-        panorama_ans = np.where(mask1[..., np.newaxis], panorama_ans, warped_pic)
-        panorama_ans[wide_window_slice] = np.where(labels[..., np.newaxis], inter1, inter2)
-
-    return (panorama_ans.clip(0, 1) * 255).astype(np.uint8)
-
-def _load_images(img_paths):
-    images = []
-    for path in img_paths:
-        img = Image.open(path)
-        img = np.array(img).astype(np.float32) / 255
-        images.append(img)
-
-    return images
+        warped_mask[wide_window_slice] = np.where(labels, False, True)
+        pano = np.where(warped_mask[..., np.newaxis], warped_img, pano)
+        img_indexes = np.where(warped_mask, i, img_indexes)
+        pano_mask = warped_mask | pano_mask
+        
+    return pano, img_indexes
 
 def stitch_graphcut(transforms_file, output_file):
 
@@ -179,7 +172,21 @@ def stitch_graphcut(transforms_file, output_file):
         img_paths = loaded_data["img_paths"]
 
     pics = _load_images(img_paths)
-    pano = _warp_coarse_to_fine(pics, transforms, panorama_size)
+    pano, img_indexes = _warp_coarse_to_fine(pics, transforms, panorama_size)
 
+    img_indexes_name = output_file.name
+    img_indexes_dir = output_file.parent / Path("img_indexes")
+    img_indexes_dir.mkdir(parents=True, exist_ok=True)
+    img_indexes_file = img_indexes_dir / img_indexes_name
+
+    # Создаем фигуру и оси
+    plt.figure(figsize=(15, 10))
+    plt.imshow(img_indexes, cmap='viridis')
+    plt.colorbar(label='Значения индексов')
+    plt.axis('off')
+    plt.savefig(img_indexes_file, bbox_inches='tight', dpi=300, pad_inches=0)
+    plt.close()
+
+    pano = (pano.clip(0, 1) * 255).astype('uint8')
     output_img = Image.fromarray(pano)
     output_img.save(output_file, quality=95)

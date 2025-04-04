@@ -76,7 +76,10 @@ if __name__ == '__main__':
         # Iterate over inner directories
         for inner_dir in tqdm(input_global_dir.iterdir()):
             if inner_dir.is_dir():
-                output_file = output_dir / Path(inner_dir.name + '-data.pkl')
-                find_and_save_transforms(inner_dir, output_file, stchr)
+                try:
+                    output_file = output_dir / Path(inner_dir.name + '-data.pkl')
+                    find_and_save_transforms(inner_dir, output_file, stchr)
+                except:
+                    print(f"Error in directory {inner_dir}")
     else:
         print(f"Directory '{input_global_dir}' does not exist or is not a directory.")

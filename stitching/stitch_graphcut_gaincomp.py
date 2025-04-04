@@ -2,10 +2,10 @@ from PIL import Image
 import pickle
 
 from utils import _load_images
-from graph_cutting import _warp_coarse_to_fine
-from stitch_gain_compensated import gain_compensation, find_mean_color, compensate_mean_color
+from stitch_graphcut import _warp_coarse_to_fine
+from stitch_collage_gaincomp import gain_compensation, find_mean_color, compensate_mean_color
 
-def stitch_gaincomp_graphcut(transforms_file, output_file):
+def stitch_graphcut_gaincomp(transforms_file, output_file):
 
     with open(transforms_file, "rb") as f:
         loaded_data = pickle.load(f)
@@ -20,5 +20,8 @@ def stitch_gaincomp_graphcut(transforms_file, output_file):
     color_scale = target_mean_color / (new_mean_color + 1e-6)
     images = [compensate_mean_color(img, color_scale) for img in images]
 
-    pano = _warp_coarse_to_fine(images, transforms, panorama_size)
-    Image.fromarray(pano).save(output_file, quality=95)
+    pano, _ = _warp_coarse_to_fine(images, transforms, panorama_size)
+
+    pano = (pano.clip(0, 1) * 255).astype('uint8')
+    output_img = Image.fromarray(pano)
+    output_img.save(output_file, quality=95)

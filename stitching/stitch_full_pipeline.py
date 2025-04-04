@@ -9,8 +9,8 @@ import numpy as np
 from PIL import Image
 
 from utils import _load_images, _warp, _warp_img
-from stitching.stitch_graphcut import coarse_to_fine_optimal_seam
-from stitching.stitch_collage_gaincomp import gain_compensation, find_mean_color, compensate_mean_color
+from stitch_graphcut import coarse_to_fine_optimal_seam
+from stitch_collage_gaincomp import gain_compensation, find_mean_color, compensate_mean_color
 
 def find_overlap_region(mask1, mask2, eps=200):
     h, w = mask1.shape[:2]
@@ -66,31 +66,29 @@ def multi_band_blending(images, masks, transforms,panorama_size, levels):
         pano += curr_band / (curr_weights[..., np.newaxis] + 1e-6)
     return pano
 
-def find_graphcut_mask(images, transforms, panorama_size): 
+def find_graphcut_mask(images, transforms, panorama_size):
     n = len(images)
     pano, pano_mask = _warp(images[0], transforms[0], panorama_size)
     img_indexes = pano_mask.astype('int8') - np.ones_like(pano_mask, dtype='int8')
-    
-    for i in tqdm(range(1, n), desc='GraphCut', position=1):
-        warped_pic, curr_mask = _warp(images[i], transforms[i], panorama_size)
-    
-        small_window_slice, wide_window_slice, small_in_wide_slice = find_overlap_region(pano_mask, curr_mask)
-    
-        inter1 = pano[wide_window_slice]
-        inter2 = warped_pic[wide_window_slice]
-    
-        labels = coarse_to_fine_optimal_seam(inter1, inter2, small_in_wide_slice,
-                                             coarse_scale=16, fine_scale=4, lane_width=200)
-    
-        curr_mask[wide_window_slice] = np.where(labels, False, True)
-        
-        pano = np.where(curr_mask[..., np.newaxis], warped_pic, pano)
-        img_indexes = np.where(curr_mask, i, img_indexes)
-        pano_mask = curr_mask | pano_mask
 
-        del warped_pic, curr_mask, labels, inter1, inter2
-    del pano, pano_mask
-    
+    for i in range(1, n):
+        warped_img, warped_mask = _warp(images[i], transforms[i], panorama_size)
+
+        small_window_slice, wide_window_slice, small_in_wide_slice = find_overlap_region(pano_mask, warped_mask)
+
+        inter_img1 = pano[wide_window_slice]
+        inter_mask1 = pano_mask[wide_window_slice]
+        inter_img2 = warped_img[wide_window_slice]
+        inter_mask2 = warped_mask[wide_window_slice]
+
+        labels = coarse_to_fine_optimal_seam(inter_img1, inter_img2, inter_mask1, inter_mask2, 
+                                             small_in_wide_slice, coarse_scale=16, fine_scale=4, lane_width=200)
+
+        warped_mask[wide_window_slice] = np.where(labels, False, True)
+        pano = np.where(warped_mask[..., np.newaxis], warped_img, pano)
+        img_indexes = np.where(warped_mask, i, img_indexes)
+        pano_mask = warped_mask | pano_mask
+        
     return img_indexes
 
 def _warp_pano_blended(images, transforms, panorama_size):
@@ -101,7 +99,7 @@ def _warp_pano_blended(images, transforms, panorama_size):
     return pano
 
 
-def stitch_pano(transforms_file, output_file):
+def stitch_full_pipeline(transforms_file, output_file):
 
     with open(transforms_file, "rb") as f:
         loaded_data = pickle.load(f)
@@ -141,7 +139,7 @@ if __name__ == '__main__':
         for transforms_file in tqdm(transforms_dir.iterdir(), desc="Panoramas", position=0):
 
             pano_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-pano.jpg"))
-            stitch_pano(transforms_file, pano_file)
+            stitch_full_pipeline(transforms_file, pano_file)
 
     else:
         print(f"Directory '{transforms_dir}' does not exist or is not a directory.")

@@ -8,7 +8,7 @@ from tqdm import tqdm
 import pickle
 from scipy.optimize import least_squares, Bounds
 
-from graph_cutting import coarse_to_fine_optimal_seam, find_overlap_region
+from stitching.stitch_graphcut import coarse_to_fine_optimal_seam, find_overlap_region
 
 borderValue = 0.0
 

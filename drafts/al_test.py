@@ -4,7 +4,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 # from image_alignment import Stitcher
-from im_al import Stitcher
+from drafts.im_al import Stitcher
 
 
 def stitch_pano(input_dir, output_file, stchr):
