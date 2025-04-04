@@ -9,8 +9,8 @@ import numpy as np
 from PIL import Image
 
 from utils import _load_images, _warp, _warp_img
-from graph_cutting import coarse_to_fine_optimal_seam
-from stitch_gain_compensated import gain_compensation, find_mean_color, compensate_mean_color
+from stitching.stitch_graphcut import coarse_to_fine_optimal_seam
+from stitching.stitch_collage_gaincomp import gain_compensation, find_mean_color, compensate_mean_color
 
 def find_overlap_region(mask1, mask2, eps=200):
     h, w = mask1.shape[:2]

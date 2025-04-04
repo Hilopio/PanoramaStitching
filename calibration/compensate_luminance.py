@@ -27,11 +27,23 @@ if __name__ == '__main__':
     black_field_path = Path(args.black_field_path)
     corrected_directory_path = Path(args.corrected_directory_path)
 
-    white_field = np.load(white_field_path)
-    white_field = cv2.GaussianBlur(white_field, (501, 501), 0)
+    if white_field_path.name.endswith('.npy'):
+        white_field = np.load(white_field_path)
+        white_field = cv2.GaussianBlur(white_field, (501, 501), 0)
+    elif white_field_path.name.endswith('.jpg') or white_field_path.name.endswith('.png'):
+        white_field = Image.open(white_field_path)
+        white_field = np.array(white_field, dtype='float32') / 255
+
+        white_field = cv2.medianBlur(white_field, 5)
+        white_field = cv2.GaussianBlur(white_field, (0, 0), 5)
+    else:
+        raise NotImplementedError
+    
 
     black_field = Image.open(black_field_path)
-    black_field = np.array(black_field) / 255
+    black_field = np.array(black_field, dtype='float32') / 255
+    black_field = cv2.medianBlur(black_field, 5)
+    black_field = cv2.GaussianBlur(black_field, (0, 0), 5)
 
     avg_white = white_field.mean(axis=(0, 1))
     avg_black = black_field.mean(axis=(0, 1))

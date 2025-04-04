@@ -3,10 +3,11 @@ import shutil
 from pathlib import Path
 from tqdm import tqdm
 
-from collage_with_transformations import stitch_collage
-from stitch_gain_compensated import stitch_gaincomp_collage
-from graph_cutting import stitch_graphcut
-from stitch_gaincomp_graphcut import stitch_gaincomp_graphcut
+from stitch_collage import stitch_collage
+from stitch_collage_gaincomp import stitch_collage_gaincomp
+from stitch_graphcut import stitch_graphcut
+from stitch_graphcut_gaincomp import stitch_graphcut_gaincomp
+from stitch_full_pipeline import stitch_full_pipeline
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -28,16 +29,16 @@ if __name__ == '__main__':
             stitch_collage(transforms_file, collage_file)
 
             collage_gaincomp_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-collage-gaincomp.jpg"))
-            stitch_gaincomp_collage(transforms_file, collage_gaincomp_file)
+            stitch_collage_gaincomp(transforms_file, collage_gaincomp_file)
 
             graphcut_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-graphcut.jpg"))
             stitch_graphcut(transforms_file, graphcut_file)
 
-            gaincomp_graphcut_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-graphcut-gaincomp.jpg"))
-            stitch_gaincomp_graphcut(transforms_file, gaincomp_graphcut_file)
+            graphcut_gaincomp_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-graphcut-gaincomp.jpg"))
+            stitch_graphcut_gaincomp(transforms_file, graphcut_gaincomp_file)
 
-            # pano_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-pano.jpg"))
-            # stitch_pano(transforms_file, pano_file)
+            full_pipeline_file = output_dir / Path(transforms_file.name.replace("-data.pkl", "-pano.jpg"))
+            stitch_full_pipeline(transforms_file, full_pipeline_file)
 
     else:
         print(f"Directory '{transforms_dir}' does not exist or is not a directory.")
