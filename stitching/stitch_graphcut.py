@@ -1,13 +1,10 @@
 import numpy as np
 import cv2
 import maxflow
-import pickle
-from PIL import Image
 import matplotlib.pyplot as plt
 from pathlib import Path
-from utils import _load_images, _warp
+from utils import _load_images, _load_transforms, _save, _warp
 
-borderValue = 0.0
 
 def diff(img1, img2):
     diff = np.sum((img1 - img2) ** 2, axis=2)
@@ -101,25 +98,12 @@ def seam2lane(seam_mask, width=200):
     return dilated
 
 
-def warp(img, H, panorama_size):
-    warped = cv2.warpPerspective(
-        img,
-        H,
-        panorama_size,
-        flags=cv2.INTER_NEAREST,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=(borderValue, borderValue, borderValue),
-    )
-    return warped
-
-
 def coarse_to_fine_optimal_seam(img1, img2, mask1, mask2, small_in_wide_slice,
-                                 coarse_scale=8, fine_scale=2, lane_width=200):
-    overlap_mask = mask1 & mask2
-    only1 = mask1 & np.logical_not(overlap_mask)
-    only2 = mask2 & np.logical_not(overlap_mask)
+                                coarse_scale=8, fine_scale=2, lane_width=200):
+    only1 = mask1 & ~mask2
+    only2 = mask2 & ~mask1
 
-    if only2.sum() < 0.01 * only2.size:
+    if only2.sum() < 0.001 * only2.size:
         return np.ones(img1.shape[:2], dtype='float32')
 
     coarse_labels = scaled_graph_cut(img1, img2, only1, only2, scale=coarse_scale)
@@ -153,24 +137,20 @@ def _warp_coarse_to_fine(images, transforms, panorama_size):
         inter_img2 = warped_img[wide_window_slice]
         inter_mask2 = warped_mask[wide_window_slice]
 
-        labels = coarse_to_fine_optimal_seam(inter_img1, inter_img2, inter_mask1, inter_mask2, 
+        labels = coarse_to_fine_optimal_seam(inter_img1, inter_img2, inter_mask1, inter_mask2,
                                              small_in_wide_slice, coarse_scale=16, fine_scale=4, lane_width=200)
 
         warped_mask[wide_window_slice] = np.where(labels, False, True)
         pano = np.where(warped_mask[..., np.newaxis], warped_img, pano)
         img_indexes = np.where(warped_mask, i, img_indexes)
         pano_mask = warped_mask | pano_mask
-        
+
     return pano, img_indexes
+
 
 def stitch_graphcut(transforms_file, output_file):
 
-    with open(transforms_file, "rb") as f:
-        loaded_data = pickle.load(f)
-        transforms = loaded_data["transforms"]
-        panorama_size = loaded_data["panorama_size"]
-        img_paths = loaded_data["img_paths"]
-
+    transforms, panorama_size, img_paths = _load_transforms(transforms_file)
     pics = _load_images(img_paths)
     pano, img_indexes = _warp_coarse_to_fine(pics, transforms, panorama_size)
 
@@ -187,6 +167,4 @@ def stitch_graphcut(transforms_file, output_file):
     plt.savefig(img_indexes_file, bbox_inches='tight', dpi=300, pad_inches=0)
     plt.close()
 
-    pano = (pano.clip(0, 1) * 255).astype('uint8')
-    output_img = Image.fromarray(pano)
-    output_img.save(output_file, quality=95)
+    _save(pano, output_file)

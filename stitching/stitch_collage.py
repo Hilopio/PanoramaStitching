@@ -1,26 +1,17 @@
-import numpy as np
-import cv2
 import shutil
 import argparse
 from pathlib import Path
-from PIL import Image
 from tqdm import tqdm
-import pickle
 
-from utils import _load_images, _warp_collage
+from utils import _load_images, _load_transforms, _save, _warp_collage
+
 
 def stitch_collage(transforms_file, output_file):
 
-    with open(transforms_file, "rb") as f:
-        loaded_data = pickle.load(f)
-        transforms = loaded_data["transforms"]
-        panorama_size = loaded_data["panorama_size"]
-        img_paths = loaded_data["img_paths"]
-
+    transforms, panorama_size, img_paths = _load_transforms(transforms_file)
     pics = _load_images(img_paths)
     pano = _warp_collage(pics, transforms, panorama_size)
-    output_img = Image.fromarray(pano)
-    output_img.save(output_file, quality=95)
+    _save(pano, output_file)
 
 
 if __name__ == '__main__':

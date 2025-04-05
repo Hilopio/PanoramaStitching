@@ -12,6 +12,7 @@ from utils import _load_images, _warp, _warp_img
 from stitch_graphcut import coarse_to_fine_optimal_seam
 from stitch_collage_gaincomp import gain_compensation, find_mean_color, compensate_mean_color
 
+
 def find_overlap_region(mask1, mask2, eps=200):
     h, w = mask1.shape[:2]
     overlap_mask = mask1 & mask2
@@ -34,11 +35,13 @@ def find_overlap_region(mask1, mask2, eps=200):
     )
     return slices
 
+
 def get_gaussian_level(img, sigmas, k):
     if k == 0:
         return img
     else:
         return cv2.GaussianBlur(img, (0, 0), sigmas[k-1], borderType=cv2.BORDER_REPLICATE)
+
 
 def get_laplacian_level(img, sigmas, k):
     if k == len(sigmas):
@@ -47,8 +50,8 @@ def get_laplacian_level(img, sigmas, k):
         return get_gaussian_level(img, sigmas, k) - get_gaussian_level(img, sigmas, k + 1)
 
 
-def multi_band_blending(images, masks, transforms,panorama_size, levels):
-    sigmas = [2.0 ** k  for k in range(levels - 1)]
+def multi_band_blending(images, masks, transforms, panorama_size, levels):
+    sigmas = [2.0 ** k for k in range(levels - 1)]
 
     w, h = panorama_size
     pano = np.zeros((h, w, 3))
@@ -66,6 +69,7 @@ def multi_band_blending(images, masks, transforms,panorama_size, levels):
         pano += curr_band / (curr_weights[..., np.newaxis] + 1e-6)
     return pano
 
+
 def find_graphcut_mask(images, transforms, panorama_size):
     n = len(images)
     pano, pano_mask = _warp(images[0], transforms[0], panorama_size)
@@ -81,20 +85,21 @@ def find_graphcut_mask(images, transforms, panorama_size):
         inter_img2 = warped_img[wide_window_slice]
         inter_mask2 = warped_mask[wide_window_slice]
 
-        labels = coarse_to_fine_optimal_seam(inter_img1, inter_img2, inter_mask1, inter_mask2, 
+        labels = coarse_to_fine_optimal_seam(inter_img1, inter_img2, inter_mask1, inter_mask2,
                                              small_in_wide_slice, coarse_scale=16, fine_scale=4, lane_width=200)
 
         warped_mask[wide_window_slice] = np.where(labels, False, True)
         pano = np.where(warped_mask[..., np.newaxis], warped_img, pano)
         img_indexes = np.where(warped_mask, i, img_indexes)
         pano_mask = warped_mask | pano_mask
-        
+
     return img_indexes
+
 
 def _warp_pano_blended(images, transforms, panorama_size):
     n = len(images)
     img_indexes = find_graphcut_mask(images, transforms, panorama_size)
-    masks = [img_indexes == i for i in range(n) ]
+    masks = [img_indexes == i for i in range(n)]
     pano = multi_band_blending(images, masks, transforms, panorama_size, 7)
     return pano
 
@@ -116,7 +121,7 @@ def stitch_full_pipeline(transforms_file, output_file):
     images = [compensate_mean_color(img, color_scale) for img in images]
 
     pano = _warp_pano_blended(images, transforms, panorama_size)
-    
+
     pano = (pano.clip(0, 1) * 255).astype(np.uint8)
     output_img = Image.fromarray(pano)
     output_img.save(output_file, quality=95)

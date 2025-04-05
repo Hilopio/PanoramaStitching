@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
 from PIL import Image
+import pickle
 
 borderValue = 0.0
+
 
 def _load_images(img_paths):
     images = []
@@ -14,8 +16,25 @@ def _load_images(img_paths):
     return images
 
 
+def _load_transforms(transforms_file):
+    with open(transforms_file, "rb") as f:
+        loaded_data = pickle.load(f)
+        transforms = loaded_data["transforms"]
+        panorama_size = loaded_data["panorama_size"]
+        img_paths = loaded_data["img_paths"]
+    return transforms, panorama_size, img_paths
+
+
+def _save(image, path):
+    image = (image.clip(0, 1) * 255).astype('uint8')
+    output_image = Image.fromarray(image)
+    output_image.save(path, quality=95)
+
+
 def _warp_collage(images, transforms, panorama_size):
-    panorama = np.zeros((*panorama_size[::-1], 3), dtype=np.float32)
+    w, h = panorama_size
+    panorama = np.full(shape=(h, w, 3), fill_value=borderValue, dtype=np.float32)
+
     for image, H in zip(images, transforms):
         cv2.warpPerspective(
             image,
@@ -25,19 +44,20 @@ def _warp_collage(images, transforms, panorama_size):
             flags=cv2.INTER_NEAREST,
             borderMode=cv2.BORDER_TRANSPARENT,
         )
+    return panorama
 
-    return (panorama.clip(0, 1) * 255).astype('uint8')
 
 def _warp_img(img, H, panorama_size):
     warped_img = cv2.warpPerspective(
         img,
         H,
         panorama_size,
-        flags=cv2.INTER_NEAREST,  # улучшить интерполяцию
+        flags=cv2.INTER_NEAREST,
         borderMode=cv2.BORDER_CONSTANT,
         borderValue=(borderValue, borderValue, borderValue)
     )
     return warped_img
+
 
 def _warp_mask(mask, H, panorama_size):
     warped_mask = cv2.warpPerspective(
@@ -49,6 +69,7 @@ def _warp_mask(mask, H, panorama_size):
         borderValue=0
     ).astype('bool')
     return warped_mask
+
 
 def _warp(image, H, panorama_size):
     warped_mask = _warp_mask(np.ones(image.shape[:-1], dtype=int), H, panorama_size)
