@@ -182,7 +182,6 @@ class Stitcher:
             torch.cuda.empty_cache()
             gc.collect()
 
-        # Filter out the correspondences with low confidence
         inliers = []
         diff_corr = []
         for batch_corr in all_corr:
@@ -197,6 +196,7 @@ class Stitcher:
                     np.concatenate([kp0, kp1, conf[..., None]], axis=-1)
                 )
 
+        # Filter out the correspondences with low confidence
         good_corrs = []
         for corrs in diff_corr:
             corrs = corrs[corrs[:, 4] > 0.95]

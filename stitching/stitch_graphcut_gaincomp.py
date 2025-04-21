@@ -7,6 +7,7 @@ def stitch_graphcut_gaincomp(transforms_file, output_file):
 
     transforms, panorama_size, img_paths = _load_transforms(transforms_file)
     images = _load_images(img_paths)
+
     target_mean_color = find_mean_color(images)
     images = gain_compensation(images, transforms, panorama_size)
     new_mean_color = find_mean_color(images)
